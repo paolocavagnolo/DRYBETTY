@@ -1,6 +1,8 @@
 #include <Ewma.h>
 #include <Controllino.h>
 
+#define TEMP_MAX 600 //era 650
+
 Ewma frigoRA(0.01);
 Ewma ariaRA(0.01);
 
@@ -92,7 +94,7 @@ void loop() {
       }
     } else {
 
-      if ((millis() - T) > 5000) {
+      if ((millis() - T) > 15000) {
         E = true;
       }
 
@@ -119,7 +121,7 @@ void loop() {
     // condizione uscita
     if (switchF) {
       if ((millis() - T) > 5000) {
-        if ((DT_ARIA <= 0.5) || (ariaTemp >= 650)) {
+        if ((DT_ARIA <= 0.5) || (ariaTemp >= TEMP_MAX)) {
           E = true;
         }
       }
@@ -130,7 +132,7 @@ void loop() {
     }
 
     if (E) {
-      if (ariaTemp < 650) {
+      if (ariaTemp < TEMP_MAX) {
         S = 0;
         C++;
       } else {
