@@ -1,10 +1,27 @@
 #include <Ewma.h>
 #include <Controllino.h>
 
-#define TEMP_MAX 600 //era 650
-
 Ewma frigoRA(0.01);
 Ewma ariaRA(0.01);
+
+#define MOT_NEUTRO CONTROLLINO_D7
+#define MOT_ARIA CONTROLLINO_D3
+#define MOT_NOARIA CONTROLLINO_D4
+
+#define COMP_FASE CONTROLLINO_D2
+#define COMP_NEUTRO CONTROLLINO_D6
+
+#define POMPA_FASE CONTROLLINO_D1
+#define POMPA_NEUTRO CONTROLLINO_D5
+
+#define VENTOLA CONTROLLINO_D0
+
+#define SWITCH CONTROLLINO_A5
+#define FRIGO_SONDA A0
+#define ARIA_SONDA A1
+
+#define MAX_TEMP 500
+
 
 int S = 0;            //STATO MACCHINA
 bool P = true;        //PRIMO INGRESSO
@@ -14,21 +31,19 @@ uint8_t C = 0;        //CONTATORE CICLI
 
 void setup() {
 
-  pinMode(CONTROLLINO_D0, OUTPUT);
-  pinMode(CONTROLLINO_D1, OUTPUT);
-  pinMode(CONTROLLINO_D2, OUTPUT);
-  pinMode(CONTROLLINO_D3, OUTPUT);
-  pinMode(CONTROLLINO_D4, OUTPUT);
-  pinMode(CONTROLLINO_D5, OUTPUT);
-  pinMode(CONTROLLINO_D6, OUTPUT);
-  pinMode(CONTROLLINO_D7, OUTPUT);
+  pinMode(MOT_NEUTRO, OUTPUT);
+  pinMode(MOT_ARIA, OUTPUT);
+  pinMode(MOT_NOARIA, OUTPUT);
+  pinMode(COMP_FASE, OUTPUT);
+  pinMode(COMP_NEUTRO, OUTPUT);
+  pinMode(POMPA_FASE, OUTPUT);
+  pinMode(POMPA_NEUTRO, OUTPUT);
+  pinMode(VENTOLA, OUTPUT);
 
-  pinMode(CONTROLLINO_A5, INPUT);
+  pinMode(SWITCH, INPUT);
 
   Serial.begin(9600);
 }
-
-
 
 bool sFRIGO = false;
 bool sPOMPA = false;
@@ -67,7 +82,7 @@ unsigned long counterS = 0;
 void loop() {
 
   readSwitch();
-  
+
   readTemp();
 
   pompa();
@@ -78,6 +93,7 @@ void loop() {
 
 
   if (S == 0) {  // NO ARIA
+
     if (P) {
       sFRIGO = true;
       sMOTNOARIA = false;
@@ -86,20 +102,21 @@ void loop() {
       P = false;
     }
 
-
     // condizione uscita
     if (switchF) {
-      if ((DT_FRIGO <= 8) && ((millis() - T) > 60000 * 2)) {
-        E = true;
+
+      if ((millis() - T) > 60000 * 2) {
+        if (DT_FRIGO <= 8) {
+          E = true;
+        }
       }
+
     } else {
 
-      if ((millis() - T) > 15000) {
+      if ((millis() - T) > 10000) {
         E = true;
       }
-
     }
-
 
     if (E) {
       S++;
@@ -120,19 +137,22 @@ void loop() {
 
     // condizione uscita
     if (switchF) {
-      if ((millis() - T) > 5000) {
-        if ((DT_ARIA <= 0.5) || (ariaTemp >= TEMP_MAX)) {
+
+      if ((millis() - T) > 60000 * 5) {
+        if ((DT_ARIA <= 0.8) || (ariaTemp >= MAX_TEMP)) {
           E = true;
         }
       }
+
     } else {
-      if ((millis() - T) > 60000 * 5) {
+
+      if ((millis() - T) > 60000 * 4) {
         E = true;
       }
     }
 
     if (E) {
-      if (ariaTemp < TEMP_MAX) {
+      if (ariaTemp < MAX_TEMP) {
         S = 0;
         C++;
       } else {
@@ -145,27 +165,53 @@ void loop() {
   }
 
 
-  while (S == 4) {  // SPEGNI TUTTO
-    // MOTORE
-    digitalWrite(CONTROLLINO_D7, LOW);
-    delay(100);
-    digitalWrite(CONTROLLINO_D4, LOW);
-    digitalWrite(CONTROLLINO_D3, LOW);
+  while (S == 4) {  // CHIUSURA
 
-    // COMPRESSORE
-    digitalWrite(CONTROLLINO_D2, LOW);
-    delay(100);
-    digitalWrite(CONTROLLINO_D6, HIGH);  //STACCA NEUTRO COMP.
+    if ((millis() - T) < (60000 * 5)) {
 
-    delay(100);
+      // MOTORE
+      digitalWrite(MOT_NEUTRO, HIGH);
+      delay(100);
+      digitalWrite(MOT_NOARIA, LOW);
+      digitalWrite(MOT_ARIA, HIGH);
 
-    // POMPA
-    digitalWrite(CONTROLLINO_D1, LOW);
-    delay(100);
-    digitalWrite(CONTROLLINO_D5, HIGH);  //STACCA NEUTRO POMPA
+      // COMPRESSORE
+      digitalWrite(COMP_FASE, LOW);
+      delay(100);
+      digitalWrite(COMP_NEUTRO, HIGH);  //STACCA NEUTRO COMP.
 
-    //VENTOLA
-    digitalWrite(CONTROLLINO_D0, LOW);
+      delay(100);
+
+      // POMPA
+      digitalWrite(POMPA_FASE, LOW);
+      delay(100);
+      digitalWrite(POMPA_NEUTRO, HIGH);  //STACCA NEUTRO POMPA
+
+      //VENTOLA
+      digitalWrite(VENTOLA, LOW);
+
+    } else {
+      // MOTORE
+      digitalWrite(MOT_NEUTRO, LOW);
+      delay(100);
+      digitalWrite(MOT_NOARIA, LOW);
+      digitalWrite(MOT_ARIA, LOW);
+
+      // COMPRESSORE
+      digitalWrite(COMP_FASE, LOW);
+      delay(100);
+      digitalWrite(COMP_NEUTRO, HIGH);  //STACCA NEUTRO COMP.
+
+      delay(100);
+
+      // POMPA
+      digitalWrite(POMPA_FASE, LOW);
+      delay(100);
+      digitalWrite(POMPA_NEUTRO, HIGH);  //STACCA NEUTRO POMPA
+
+      //VENTOLA
+      digitalWrite(VENTOLA, LOW);
+    }
   }
 }
 
@@ -175,23 +221,23 @@ void act() {
     tAct = millis();
 
     if (sFRIGO != osFRIGO) {
-      digitalWrite(CONTROLLINO_D2, sFRIGO);
+      digitalWrite(COMP_FASE, sFRIGO);
       osFRIGO = sFRIGO;
     } else if (sPOMPA != osPOMPA) {
-      digitalWrite(CONTROLLINO_D1, sPOMPA);
+      digitalWrite(POMPA_FASE, sPOMPA);
       osPOMPA = sPOMPA;
     } else if (sMOTARIA != osMOTARIA) {
-      digitalWrite(CONTROLLINO_D7, sMOTARIA);
-      digitalWrite(CONTROLLINO_D3, LOW);
-      digitalWrite(CONTROLLINO_D4, HIGH);
+      digitalWrite(MOT_NEUTRO, sMOTARIA);
+      digitalWrite(MOT_ARIA, LOW);
+      digitalWrite(MOT_NOARIA, HIGH);
       osMOTARIA = sMOTARIA;
     } else if (sMOTNOARIA != osMOTNOARIA) {
-      digitalWrite(CONTROLLINO_D7, sMOTNOARIA);
-      digitalWrite(CONTROLLINO_D3, HIGH);
-      digitalWrite(CONTROLLINO_D4, LOW);
+      digitalWrite(MOT_NEUTRO, sMOTNOARIA);
+      digitalWrite(MOT_ARIA, HIGH);
+      digitalWrite(MOT_NOARIA, LOW);
       osMOTNOARIA = osMOTNOARIA;
     } else if (sVENTOLA != osVENTOLA) {
-      digitalWrite(CONTROLLINO_D0, sVENTOLA);
+      digitalWrite(VENTOLA, sVENTOLA);
       osVENTOLA = sVENTOLA;
     }
   }
@@ -215,8 +261,8 @@ void readTemp() {
 
   if ((millis() - tTemp1) > 100) {
 
-    frigoTemp = frigoRA.filter(analogRead(A0));
-    ariaTemp = ariaRA.filter(analogRead(A1));
+    frigoTemp = frigoRA.filter(analogRead(FRIGO_SONDA));
+    ariaTemp = ariaRA.filter(analogRead(ARIA_SONDA));
 
     tTemp1 = millis();
   }
@@ -253,7 +299,7 @@ void debug() {
 
 void readSwitch() {
   if (switchF) {
-    if (analogRead(CONTROLLINO_A5) > 512) {
+    if (analogRead(SWITCH) > 512) {
       counterS++;
     } else {
       counterS = 0;
@@ -264,7 +310,7 @@ void readSwitch() {
       counterS = 0;
     }
   } else {
-    if (analogRead(CONTROLLINO_A5) < 512) {
+    if (analogRead(SWITCH) < 512) {
       counterS++;
     } else {
       counterS = 0;
@@ -275,5 +321,4 @@ void readSwitch() {
       counterS = 0;
     }
   }
-
 }
